@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "csem-midl"
+version = "0.1.0"
+description = "Python client for the MIDL solar wind dataset"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Connor DiMarco" },
+]
+dependencies = [
+    "xarray>=2023.1",
+    "pandas>=2.0",
+    "requests>=2.28",
+    "platformdirs>=3.0",
+]
+
+[project.urls]
+Homepage = "https://csem.engin.umich.edu/MIDL/"
+
+[tool.hatch.build.targets.wheel]
+packages = ["midl"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
