@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "csem-midl"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python client for the MIDL solar wind dataset"
 readme = "README.md"
 license = "MIT"
@@ -24,6 +24,10 @@ Homepage = "https://csem.engin.umich.edu/MIDL/"
 
 [tool.hatch.build.targets.wheel]
 packages = ["midl"]
+
+[tool.pytest.ini_options]
+markers = ["smoke: tests that download from the MIDL web host"]
+addopts = "-m 'not smoke'"
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
