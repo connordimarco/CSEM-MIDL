@@ -12,6 +12,18 @@ requires-python = ">=3.10"
 authors = [
     { name = "Connor DiMarco" },
 ]
+keywords = [
+    "solar wind", "space weather", "heliophysics", "space physics",
+    "L1", "ACE", "DSCOVR", "WIND", "OMNI",
+    "interplanetary magnetic field", "MIDL",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
 dependencies = [
     "xarray>=2023.1",
     "pandas>=2.0",
@@ -21,6 +33,10 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://csem.engin.umich.edu/MIDL/"
+Documentation = "https://csem.engin.umich.edu/MIDL/"
+Repository = "https://github.com/connordimarco/CSEM-MIDL"
+"Bug Tracker" = "https://github.com/connordimarco/CSEM-MIDL/issues"
+"Data Pipeline" = "https://github.com/connordimarco/MIDL-Pipeline"
 
 [tool.hatch.build.targets.wheel]
 packages = ["midl"]

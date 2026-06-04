@@ -84,3 +84,4 @@ for name, da in ds.data_vars.items():
 ## See also
 
 - [MIDL-Pipeline](https://github.com/connordimarco/MIDL-Pipeline) — the code that produces the MIDL dataset
+- [MSWIM2D](https://csem.engin.umich.edu/MSWIM2D/) — 2-D MHD solar wind model (1–75 AU) driven by MIDL L1 data; Python client [`mswim2d`](https://github.com/connordimarco/CSEM-MSWIM2D)
