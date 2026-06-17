@@ -14,6 +14,21 @@ _NUMERIC_COLS = ("Bx", "By", "Bz", "Ux", "Uy", "Uz", "rho", "T")
 
 METHODS = {"ballistic"}
 
+# Interpolation-provenance flag groups -> representative data column. The
+# merged 0/1/2 flag level cannot ride through the numeric regridding as a
+# single number (index interpolation blends adjacent parcels), so each level
+# is decomposed into two monotone 0/1 carriers, exactly as the pipeline does
+# in l1_midl.py (and MIDL-Web propagate.js):
+#   <group>__interp_any = level >= 1, <group>__interp_all = level >= 2.
+# After regridding the smeared carriers binarize back:
+#   any: blend > 0  (a flagged parent contributed - conservative),
+#   all: blend == 1 (every contributing parent was all-interpolated).
+_FLAG_REPR_COL = {"B": "Bx", "Ux": "Ux", "Uyz": "Uy", "rho": "rho", "T": "T"}
+_FLAG_GROUPS = tuple(_FLAG_REPR_COL)
+_INTERP_SUFFIX = "_interp"
+_CARRY_ANY = "__interp_any"
+_CARRY_ALL = "__interp_all"
+
 
 def _ballistic_propagate_df(df: pd.DataFrame, target_re: float) -> pd.DataFrame:
     """Ballistically propagate L1 observations to ``target_re`` (Earth radii).
@@ -30,6 +45,13 @@ def _ballistic_propagate_df(df: pd.DataFrame, target_re: float) -> pd.DataFrame:
        (limit=2 to bridge sub-minute jitter).
     5. Restore the original Ux NaN mask so timing fills don't leak into
        output values.
+
+    Any ``{B,Ux,Uyz,rho,T}_interp`` provenance flags present on ``df`` are
+    carried through (via the any/all carrier decomposition) and reassembled
+    onto the output grid. Custom-distance propagation performs no wide
+    post-propagation gap fill, so the carried flags take values 0 (direct),
+    1 (mixed), and 2 (all-interpolated) only; level 3 (post-propagation fill)
+    occurs solely in the server-side 14/32 Re products.
     """
     target_x_km = float(target_re) * RE_KM
 
@@ -56,7 +78,22 @@ def _ballistic_propagate_df(df: pd.DataFrame, target_re: float) -> pd.DataFrame:
     valid[finite_mask] = valid_finite
 
     numeric = [c for c in _NUMERIC_COLS if c in df.columns]
-    propagated = df.loc[valid, numeric].copy()
+
+    # Decompose any interpolation-provenance flags into monotone 0/1 carriers
+    # so they survive the numeric regridding; reassembled into <group>_interp
+    # columns once the smeared carriers land on the output grid.
+    flag_groups = [g for g in _FLAG_GROUPS if f"{g}{_INTERP_SUFFIX}" in df.columns]
+    carry_cols: list[str] = []
+    src = df
+    if flag_groups:
+        src = df.copy()
+        for g in flag_groups:
+            lev = src[f"{g}{_INTERP_SUFFIX}"].fillna(0)
+            src[f"{g}{_CARRY_ANY}"] = (lev >= 1).astype(float)
+            src[f"{g}{_CARRY_ALL}"] = (lev >= 2).astype(float)
+            carry_cols += [f"{g}{_CARRY_ANY}", f"{g}{_CARRY_ALL}"]
+
+    propagated = src.loc[valid, numeric + carry_cols].copy()
     propagated.index = arrivals[valid]
 
     propagated = propagated[propagated.index.notna()]
@@ -73,6 +110,24 @@ def _ballistic_propagate_df(df: pd.DataFrame, target_re: float) -> pd.DataFrame:
 
     ux_nan_on_grid = ux_orig_nan.reindex(grid, method="nearest", tolerance=pd.Timedelta("30s"))
     result.loc[ux_nan_on_grid.fillna(False).astype(bool), "Ux"] = np.nan
+
+    # Binarize the smeared carriers back into 0/1/2 flag levels, then drop the
+    # internal carrier columns from the numeric output.
+    for g in flag_groups:
+        any_f = result[f"{g}{_CARRY_ANY}"].fillna(0.0) > 0.0
+        all_f = (result[f"{g}{_CARRY_ALL}"].fillna(0.0) >= 1.0 - 1e-9) & any_f
+        flag = pd.Series(0, index=result.index, dtype="int64")
+        flag = flag.mask(any_f, 1)
+        flag = flag.mask(all_f, 2)
+        # A flag is only meaningful where there is a value: blank it (NaN)
+        # where the group's representative column is missing, matching the
+        # pipeline (this also promotes the column to float, as in the CSVs).
+        repr_col = _FLAG_REPR_COL[g]
+        if repr_col in result.columns:
+            flag = flag.astype("float64").mask(result[repr_col].isna(), np.nan)
+        result[f"{g}{_INTERP_SUFFIX}"] = flag
+    if carry_cols:
+        result = result.drop(columns=carry_cols)
 
     return result
 

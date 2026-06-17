@@ -80,6 +80,57 @@ class TestBallisticDf:
         assert abs(result.loc[probe, "Bx"] - df.loc[source_time, "Bx"]) <= 1.5
 
 
+class TestFlagCarry:
+    """Interpolation-provenance flags ride through custom-distance propagation."""
+
+    def _l1_with_flags(self, flagval=0, n=60, ux=-400.0, x_re=200.0):
+        # ux=-400 gives a non-integer-minute travel time (~49 min 23 s), so
+        # arrivals land off-grid and the carriers genuinely blend.
+        df = _synthetic_l1_df(n, ux, x_re)
+        for g in ("B", "Ux", "Uyz", "rho", "T"):
+            df[f"{g}_interp"] = flagval
+        return df
+
+    def test_flag_columns_present_and_blank_where_missing(self):
+        out = _ballistic_propagate_df(self._l1_with_flags(0), target_re=14.0)
+        for g in ("B", "Ux", "Uyz", "rho", "T"):
+            assert f"{g}_interp" in out.columns
+        finite = out["Bx"].notna()
+        # All-direct input stays level 0 wherever a value exists ...
+        assert (out.loc[finite, "B_interp"] == 0).all()
+        # ... and the flag is blank (NaN) exactly where the value is missing.
+        assert out.loc[~finite, "B_interp"].isna().all()
+
+    def test_all_interpolated_region_maps_to_level_2(self):
+        out = _ballistic_propagate_df(self._l1_with_flags(2), target_re=14.0)
+        finite = out["Ux"].notna()
+        assert (out.loc[finite, "Ux_interp"] == 2).all()
+
+    def test_mixed_parents_are_conservative(self):
+        df = self._l1_with_flags(0)
+        # Alternate direct (0) and all-interpolated (2): every blended minute
+        # mixes a flagged and an unflagged parent, so it must read >=1 and
+        # can never reach 2 (which requires every contributor interpolated).
+        df["Ux_interp"] = np.tile([0, 2], len(df) // 2 + 1)[: len(df)]
+        out = _ballistic_propagate_df(df, target_re=14.0)
+        vals = out.loc[out["Ux"].notna(), "Ux_interp"]
+        assert vals.min() >= 1
+        assert vals.max() <= 2
+
+    def test_no_flag_columns_when_absent(self):
+        out = _ballistic_propagate_df(_synthetic_l1_df(30), target_re=14.0)
+        assert not any(c.endswith("_interp") for c in out.columns)
+
+    def test_propagate_xarray_path_carries_flags(self):
+        df = self._l1_with_flags(0)
+        ds = xr.Dataset.from_dataframe(df.rename_axis("time"))
+        ds.attrs["midl_propagation"] = None
+        out = propagate(ds, "ballistic", 14)
+        assert "B_interp" in out.data_vars
+        assert "X" not in out.data_vars
+        assert "B_source" not in out.data_vars
+
+
 class TestPropagate:
     def _load_l1(self):
         with patch("midl._loader.ensure_cached", return_value=DATA_DIR / "202403_L1.csv"):

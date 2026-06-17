@@ -595,6 +595,21 @@ _VAR_ATTRS: dict[str, dict[str, str]] = {
     "Uyz_source": {"long_name": "Uy/Uz source(s)"},
     "rho_source": {"long_name": "Density source(s)"},
     "T_source": {"long_name": "Temperature source(s)"},
+    "B_interp": {"long_name": "Magnetic field interpolation-provenance flag",
+                 "flag_values": "0, 1, 2, 3",
+                 "flag_meanings": "direct mixed all_interpolated post_propagation_fill"},
+    "Ux_interp": {"long_name": "Ux interpolation-provenance flag",
+                  "flag_values": "0, 1, 2, 3",
+                  "flag_meanings": "direct mixed all_interpolated post_propagation_fill"},
+    "Uyz_interp": {"long_name": "Uy/Uz interpolation-provenance flag",
+                   "flag_values": "0, 1, 2, 3",
+                   "flag_meanings": "direct mixed all_interpolated post_propagation_fill"},
+    "rho_interp": {"long_name": "Density interpolation-provenance flag",
+                   "flag_values": "0, 1, 2, 3",
+                   "flag_meanings": "direct mixed all_interpolated post_propagation_fill"},
+    "T_interp": {"long_name": "Temperature interpolation-provenance flag",
+                 "flag_values": "0, 1, 2, 3",
+                 "flag_meanings": "direct mixed all_interpolated post_propagation_fill"},
 }
 
 
