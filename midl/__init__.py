@@ -6,4 +6,4 @@ from midl._propagate import propagate
 from midl._savers import to_csv, to_dat
 
 __all__ = ["load", "merge", "propagate", "to_csv", "to_dat"]
-__version__ = "0.5.0"
+__version__ = "0.6.0"
