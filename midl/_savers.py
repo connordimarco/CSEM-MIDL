@@ -25,6 +25,12 @@ _DAT_L1_EXTRA_FLOAT = ("X", 10, 1)
 _DAT_L1_SOURCE_COLS = ["B_source", "Ux_source", "Uyz_source", "rho_source", "T_source"]
 _DAT_SOURCE_WIDTH = 5
 
+# Interpolation-provenance flag columns. Present on flag-enabled L1 and
+# ballistic products (absent on MHD and older files). Written for every
+# product that carries them and appended after the L1 source columns, matching
+# MIDL-Web/static/app.js (csvToDat) so the client and web .dat agree.
+_INTERP_COLS = ["B_interp", "Ux_interp", "Uyz_interp", "rho_interp", "T_interp"]
+
 
 def to_csv(ds: xr.Dataset, path: str | Path) -> None:
     """Write a MIDL Dataset to CSV in the standard MIDL format.
@@ -41,7 +47,7 @@ def to_csv(ds: xr.Dataset, path: str | Path) -> None:
     for col, decimals in _CSV_PRECISION.items():
         if col in df.columns:
             df[col] = df[col].round(decimals)
-    for col in _DAT_L1_SOURCE_COLS:
+    for col in _DAT_L1_SOURCE_COLS + _INTERP_COLS:
         if col in df.columns:
             df[col] = df[col].apply(
                 lambda v: str(int(v)) if pd.notna(v) else "")
@@ -86,6 +92,7 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
 
     # Build header
     df = ds.to_dataframe()
+    has_interp = all(col in df.columns for col in _INTERP_COLS)
     first = pd.Timestamp(df.index[0])
     last = pd.Timestamp(df.index[-1])
     date_range = f"{first:%Y-%m}" if first.to_period("M") == last.to_period("M") else f"{first:%Y-%m} to {last:%Y-%m}"
@@ -97,6 +104,8 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
     cols = "year month day hour minute Bx By Bz Ux Uy Uz rho T"
     if is_l1:
         cols += " X B_source Ux_source Uyz_source rho_source T_source"
+    if has_interp:
+        cols += " " + " ".join(_INTERP_COLS)
     header2 = cols + "\n"
 
     with open(path, "w", encoding="utf-8") as f:
@@ -122,5 +131,9 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
                 line += _fmt_float(float(row[col]), width, decimals)
                 for src_col in _DAT_L1_SOURCE_COLS:
                     line += _fmt_source(row.get(src_col), _DAT_SOURCE_WIDTH)
+
+            if has_interp:
+                for flag_col in _INTERP_COLS:
+                    line += _fmt_source(row.get(flag_col), _DAT_SOURCE_WIDTH)
 
             f.write(line + "\n")

@@ -2,11 +2,12 @@
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import xarray as xr
 
 from midl._loader import _read_csv, _to_dataset
-from midl._savers import to_csv, to_dat
+from midl._savers import _INTERP_COLS, to_csv, to_dat
 
 DATA_DIR = Path(__file__).parent / "data"
 
@@ -19,6 +20,21 @@ def _load_sample_32re() -> xr.Dataset:
 def _load_sample_l1() -> xr.Dataset:
     df = _read_csv(DATA_DIR / "202403_L1.csv")
     return _to_dataset(df, "L1")
+
+
+def _add_interp(ds: xr.Dataset) -> xr.Dataset:
+    """Attach synthetic {B,Ux,Uyz,rho,T}_interp flags (sample CSVs predate them).
+
+    Values cycle 0,1,2,3 with index 1 set to NaN so the missing-flag (blank in
+    CSV / 'nan' in DAT) path is exercised.
+    """
+    ds = ds.copy()
+    n = ds.sizes["time"]
+    base = np.array([float(i % 4) for i in range(n)])
+    base[1] = np.nan
+    for col in _INTERP_COLS:
+        ds[col] = ("time", base.copy())
+    return ds
 
 
 class TestToCsv:
@@ -44,6 +60,20 @@ class TestToCsv:
         # T should be integer (0 decimals)
         t_str = df["T"].dropna().iloc[0]
         assert float(t_str) == int(float(t_str))
+
+    def test_csv_writes_interp_as_int(self, tmp_path):
+        ds = _add_interp(_load_sample_32re())
+        out = tmp_path / "out.csv"
+        to_csv(ds, out)
+
+        with open(out) as f:
+            lines = f.read().splitlines()
+        assert all(c in lines[0] for c in _INTERP_COLS)
+        # Integer flags, not floats: "1" not "1.0". Index-1 row is NaN -> blank.
+        body = lines[1:]
+        assert body[0].rstrip().endswith(",0,0,0,0,0")
+        assert body[1].rstrip().endswith(",,,,,")  # NaN -> empty fields
+        assert body[2].rstrip().endswith(",2,2,2,2,2")
 
 
 class TestToDat:
@@ -103,3 +133,44 @@ class TestToDat:
         import pytest
         with pytest.raises(ValueError, match="target"):
             to_dat(ds, tmp_path / "out.dat")
+
+    def test_interp_columns_in_header_and_rows(self, tmp_path):
+        # Ballistic product: no L1 source cols, but interp must still appear.
+        ds = _add_interp(_load_sample_32re())
+        out = tmp_path / "out.dat"
+        to_dat(ds, out)
+
+        with open(out) as f:
+            lines = f.read().splitlines()
+        header = lines[1].split()
+        assert header[-5:] == _INTERP_COLS
+        # Data rows: 5 trailing flag fields (width 5), nan on the NaN row.
+        first_row = lines[3].split()
+        assert first_row[-5:] == ["0", "0", "0", "0", "0"]
+        nan_row = lines[4].split()
+        assert nan_row[-5:] == ["nan", "nan", "nan", "nan", "nan"]
+
+    def test_interp_columns_follow_l1_source(self, tmp_path):
+        # L1 product: interp flags come after the five *_source columns.
+        ds = _add_interp(_load_sample_l1())
+        out = tmp_path / "out.dat"
+        to_dat(ds, out)
+
+        with open(out) as f:
+            lines = f.read().splitlines()
+        header = lines[1].split()
+        assert header[-10:] == [
+            "B_source", "Ux_source", "Uyz_source", "rho_source", "T_source",
+            *_INTERP_COLS,
+        ]
+
+    def test_no_interp_when_absent(self, tmp_path):
+        # MHD / legacy datasets have no flags: header and rows stay flag-free.
+        ds = _load_sample_32re()
+        out = tmp_path / "out.dat"
+        to_dat(ds, out)
+
+        with open(out) as f:
+            lines = f.read().splitlines()
+        assert not any(c in lines[1] for c in _INTERP_COLS)
+        assert lines[1].split()[-1] == "T"
