@@ -48,10 +48,10 @@ def _ballistic_propagate_df(df: pd.DataFrame, target_re: float) -> pd.DataFrame:
 
     Any ``{B,Ux,Uyz,rho,T}_interp`` provenance flags present on ``df`` are
     carried through (via the any/all carrier decomposition) and reassembled
-    onto the output grid. Custom-distance propagation performs no wide
-    post-propagation gap fill, so the carried flags take values 0 (direct),
-    1 (mixed), and 2 (all-interpolated) only; level 3 (post-propagation fill)
-    occurs solely in the server-side 14/32 Re products.
+    onto the output grid. The flags take values 0 (direct), 1 (mixed), and
+    2 (all-interpolated). Post-propagation gap fills inherit the worse of
+    their two bracketing levels, so they too read 0/1/2; there is no distinct
+    fill level. The server-side 14/32 Re products use the same 0/1/2 scheme.
     """
     target_x_km = float(target_re) * RE_KM
 
