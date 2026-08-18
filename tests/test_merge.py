@@ -56,6 +56,36 @@ class TestMergeValidation:
             merge({"bad": ds})
 
 
+class TestMergeCoords:
+    def test_mixed_coords_raises(self):
+        a = _synthetic_dataset()
+        b = _synthetic_dataset()
+        b.attrs["coords_system"] = "GSE"
+        with pytest.raises(ValueError, match="different coordinate systems"):
+            merge({"a": a, "b": b})
+
+    def test_shared_coords_propagates_to_output(self):
+        a = _synthetic_dataset()
+        b = _synthetic_dataset()
+        a.attrs["coords_system"] = "GSE"
+        b.attrs["coords_system"] = "GSE"
+        merged = merge({"a": a, "b": b})
+        assert merged.attrs["coords_system"] == "GSE"
+        assert merged["Bx"].attrs["coordinate_system"] == "GSE"
+
+    def test_default_is_gsm(self):
+        merged = merge({"a": _synthetic_dataset(), "b": _synthetic_dataset()})
+        assert merged.attrs["coords_system"] == "GSM"
+        assert merged["Bx"].attrs["coordinate_system"] == "GSM"
+
+    def test_single_source_path_propagates_coords(self):
+        a = _synthetic_dataset()
+        a.attrs["coords_system"] = "SM"
+        merged = merge({"a": a})
+        assert merged.attrs["coords_system"] == "SM"
+        assert merged["Ux"].attrs["coordinate_system"] == "SM"
+
+
 # ---------------------------------------------------------------------------
 # Single source
 # ---------------------------------------------------------------------------

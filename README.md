@@ -53,6 +53,31 @@ midl.load("2024-05-10 00:00", "2024-05-11 01:00", "L1")
 ```
 Client-side MHD propagation is not supported.
 
+### Coordinate systems
+
+MIDL data is native GSM. Pass `coords="GSE"` or `coords="SM"` (case-insensitive,
+default `"GSM"`) to rotate the vector variables (Bx, By, Bz, Ux, Uy, Uz)
+per minute using the server's published angle files, where
+psi = `gsm_gse_angle_deg` and mu = `dipole_tilt_deg`:
+
+```python
+midl.load("2024-05-10 00:00", "2024-05-11 01:00", 32, coords="GSE")
+midl.load("2024-05-10 00:00", "2024-05-11 01:00", "L1", coords="SM")
+```
+
+```
+By_gse = cos(psi)*By_gsm - sin(psi)*Bz_gsm     # Bx unchanged
+Bz_gse = sin(psi)*By_gsm + cos(psi)*Bz_gsm
+
+Bx_sm  = cos(mu)*Bx_gsm - sin(mu)*Bz_gsm       # By unchanged
+Bz_sm  = sin(mu)*Bx_gsm + cos(mu)*Bz_gsm
+```
+
+Vector components are rotated in each minute's instantaneous frame orientation
+(standard convention, same as OMNI). Scalars (rho, T) and provenance columns
+are untouched, and the L1 `X` variable always remains the reference satellite
+X_GSM position regardless of `coords`.
+
 Saving to file:
 ```python
 midl.to_csv(data, "storm.csv")

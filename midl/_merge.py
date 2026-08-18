@@ -613,6 +613,20 @@ _VAR_ATTRS: dict[str, dict[str, str]] = {
 }
 
 
+def _apply_var_attrs(result_ds: xr.Dataset, coords_system: str) -> None:
+    """Stamp standard per-variable attrs, honoring the shared frame.
+
+    Copies each attrs dict per call so the module-level ``_VAR_ATTRS``
+    template is never mutated.
+    """
+    for var, attrs in _VAR_ATTRS.items():
+        if var in result_ds:
+            var_attrs = dict(attrs)
+            if "coordinate_system" in var_attrs:
+                var_attrs["coordinate_system"] = coords_system
+            result_ds[var].attrs.update(var_attrs)
+
+
 def merge(
     datasets: dict[str, xr.Dataset],
     thresholds: dict[str, float] | None = None,
@@ -637,6 +651,10 @@ def merge(
         ``"ace"``, ``"imp8"``).  Each Dataset must have a ``time``
         coordinate and the standard solar wind variables (Bx, By, Bz,
         Ux, Uy, Uz, rho, T).  Missing variables are treated as all-NaN.
+        All inputs must share one coordinate system
+        (``attrs['coords_system']``, default ``"GSM"``); mixing frames
+        raises ``ValueError``, and the shared frame is stamped onto the
+        merged output.
     thresholds : dict[str, float] or None
         Per-variable agreement thresholds.  Defaults match the MIDL
         pipeline: B ±8 nT, Ux ±80 km/s, Uy/Uz ±40 km/s, rho ±2 cm⁻³.
@@ -672,6 +690,16 @@ def merge(
                 "Resample to 1-minute cadence first, e.g. "
                 "ds.resample(time='1min').mean()"
             )
+
+    coords_seen = {
+        ds.attrs.get("coords_system", "GSM") for ds in datasets.values()
+    }
+    if len(coords_seen) > 1:
+        raise ValueError(
+            "Cannot merge datasets in different coordinate systems: "
+            f"{sorted(coords_seen)}. Rotate all inputs to a common frame first."
+        )
+    coords_system = coords_seen.pop()
 
     th = dict(_DEFAULT_THRESHOLDS)
     if thresholds is not None:
@@ -710,9 +738,8 @@ def merge(
             df_out[pcol] = pseries
         result_ds = xr.Dataset.from_dataframe(df_out.rename_axis("time"))
         result_ds.attrs["source"] = "MIDL merge"
-        for var, attrs in _VAR_ATTRS.items():
-            if var in result_ds:
-                result_ds[var].attrs.update(attrs)
+        result_ds.attrs["coords_system"] = coords_system
+        _apply_var_attrs(result_ds, coords_system)
         return result_ds
 
     # --- Quality scoring ---
@@ -744,8 +771,7 @@ def merge(
 
     result_ds = xr.Dataset.from_dataframe(df_combined.rename_axis("time"))
     result_ds.attrs["source"] = "MIDL merge"
-    for var, attrs in _VAR_ATTRS.items():
-        if var in result_ds:
-            result_ds[var].attrs.update(attrs)
+    result_ds.attrs["coords_system"] = coords_system
+    _apply_var_attrs(result_ds, coords_system)
 
     return result_ds

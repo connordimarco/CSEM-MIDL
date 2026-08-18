@@ -183,3 +183,84 @@ class TestLoadValidation:
         with patch("midl._loader.ensure_cached", return_value=DATA_DIR / "202403_32Re.csv"):
             ds = load("2024-03-01 00:00", "2024-03-01 00:03", 32, method="BALLISTIC")
         assert ds.attrs["midl_propagation"]["method"] == "ballistic"
+
+
+class TestLoadCoords:
+    def test_gsm_output_identical_to_default(self):
+        with patch("midl._loader.ensure_cached", return_value=DATA_DIR / "202403_32Re.csv"):
+            default = load("2024-03-01 00:00", "2024-03-01 00:09", 32)
+            explicit = load("2024-03-01 00:00", "2024-03-01 00:09", 32, coords="GSM")
+        xr.testing.assert_identical(default, explicit)
+        assert default.attrs["coords_system"] == "GSM"
+        assert default["Bx"].attrs["coordinate_system"] == "GSM"
+
+    def test_gse_sets_attrs(self):
+        with (
+            patch("midl._loader.ensure_cached", return_value=DATA_DIR / "202403_32Re.csv"),
+            patch("midl._coords.ensure_cached", return_value=DATA_DIR / "202403_angles.csv"),
+        ):
+            ds = load("2024-03-01 00:00", "2024-03-01 00:09", 32, coords="GSE")
+        assert ds.attrs["coords_system"] == "GSE"
+        for var in ("Bx", "By", "Bz", "Ux", "Uy", "Uz"):
+            assert ds[var].attrs["coordinate_system"] == "GSE"
+
+    def test_gse_rotates_values(self):
+        with (
+            patch("midl._loader.ensure_cached", return_value=DATA_DIR / "202403_32Re.csv"),
+            patch("midl._coords.ensure_cached", return_value=DATA_DIR / "202403_angles.csv"),
+        ):
+            gsm = load("2024-03-01 00:00", "2024-03-01 00:09", 32)
+            gse = load("2024-03-01 00:00", "2024-03-01 00:09", 32, coords="GSE")
+        psi = np.radians(-12.3456)  # angle fixture row for 00:00
+        exp_by = np.cos(psi) * gsm["By"].values[0] - np.sin(psi) * gsm["Bz"].values[0]
+        exp_bz = np.sin(psi) * gsm["By"].values[0] + np.cos(psi) * gsm["Bz"].values[0]
+        assert gse["Bx"].values[0] == gsm["Bx"].values[0]
+        np.testing.assert_allclose(gse["By"].values[0], exp_by, rtol=1e-12)
+        np.testing.assert_allclose(gse["Bz"].values[0], exp_bz, rtol=1e-12)
+
+    def test_coords_case_insensitive(self):
+        with (
+            patch("midl._loader.ensure_cached", return_value=DATA_DIR / "202403_32Re.csv"),
+            patch("midl._coords.ensure_cached", return_value=DATA_DIR / "202403_angles.csv"),
+        ):
+            ds = load("2024-03-01 00:00", "2024-03-01 00:09", 32, coords="gse")
+        assert ds.attrs["coords_system"] == "GSE"
+
+    def test_l1_x_stays_gsm(self):
+        with (
+            patch("midl._loader.ensure_cached", return_value=DATA_DIR / "202403_L1.csv"),
+            patch("midl._coords.ensure_cached", return_value=DATA_DIR / "202403_angles.csv"),
+        ):
+            gsm = load("2024-03-01 00:00", "2024-03-01 00:09", "l1")
+            gse = load("2024-03-01 00:00", "2024-03-01 00:09", "l1", coords="GSE")
+        np.testing.assert_array_equal(gse["X"].values, gsm["X"].values)
+        assert gse["X"].attrs["coordinate_system"] == "GSM"
+
+    def test_invalid_coords_raises(self):
+        with pytest.raises(ValueError, match="'GSM', 'GSE', 'SM'"):
+            load("2024-03-01", "2024-03-01 00:03", 32, coords="GEI")
+
+    def test_custom_ballistic_propagates_unrotated_gsm(self):
+        # ORDERING: propagate() must receive native-GSM (un-rotated) data;
+        # the rotation happens after propagation and the final time slice.
+        l1_df = _read_csv(DATA_DIR / "202403_L1.csv")
+        times = pd.date_range("2024-03-01 00:00", "2024-03-01 00:09", freq="min")
+        sentinel = xr.Dataset(
+            {"Bx": (("time",), np.arange(len(times), dtype=float))},
+            coords={"time": times},
+        )
+        with (
+            patch("midl._loader._load_monthly", return_value=l1_df),
+            patch("midl._loader.propagate", return_value=sentinel) as mock_prop,
+            patch("midl._coords.ensure_cached", return_value=DATA_DIR / "202403_angles.csv"),
+        ):
+            ds = load("2024-03-01 00:00", "2024-03-01 00:03", 20, coords="GSE")
+
+        mock_prop.assert_called_once()
+        prop_input = mock_prop.call_args[0][0]
+        # The dataset handed to propagate carries the raw GSM fixture values.
+        np.testing.assert_array_equal(prop_input["By"].values, l1_df["By"].values)
+        np.testing.assert_array_equal(prop_input["Bz"].values, l1_df["Bz"].values)
+        assert prop_input.attrs.get("coords_system", "GSM") == "GSM"
+        # The returned dataset is stamped with the requested frame.
+        assert ds.attrs["coords_system"] == "GSE"

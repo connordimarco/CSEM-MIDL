@@ -96,7 +96,7 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
     first = pd.Timestamp(df.index[0])
     last = pd.Timestamp(df.index[-1])
     date_range = f"{first:%Y-%m}" if first.to_period("M") == last.to_period("M") else f"{first:%Y-%m} to {last:%Y-%m}"
-    units = "GSM nT, km/s, cm^-3, K"
+    units = f"{ds.attrs.get('coords_system', 'GSM')} nT, km/s, cm^-3, K"
     if is_l1:
         units += ", Re"
     header1 = f"MIDL {target} Data for {date_range} ({units})\n"

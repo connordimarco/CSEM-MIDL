@@ -165,6 +165,14 @@ def propagate(ds: xr.Dataset, method: str, target_re: float) -> xr.Dataset:
     if method not in METHODS:
         raise ValueError(f"Unknown method {method!r}. Valid methods: {sorted(METHODS)}")
 
+    coords_system = ds.attrs.get("coords_system", "GSM")
+    if coords_system != "GSM":
+        raise ValueError(
+            f"propagate() requires GSM-frame data, got coords_system="
+            f"{coords_system!r}. Ballistic propagation is GSM-only physics: "
+            "load with coords='GSM', propagate, then rotate the result."
+        )
+
     if "X" not in ds.data_vars:
         raise ValueError(
             "propagate() requires the L1 dataset (missing 'X' source position). "

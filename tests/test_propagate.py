@@ -186,6 +186,24 @@ class TestPropagate:
         via_function = propagate(ds, "ballistic", 14)
         xr.testing.assert_equal(via_accessor, via_function)
 
+    def test_non_gsm_rejected(self):
+        ds = self._load_l1()
+        ds.attrs["coords_system"] = "GSE"
+        with pytest.raises(ValueError, match="GSM"):
+            propagate(ds, "ballistic", 14)
+
+    def test_non_gsm_rejected_via_accessor(self):
+        ds = self._load_l1()
+        ds.attrs["coords_system"] = "SM"
+        with pytest.raises(ValueError, match="GSM"):
+            ds.midl.propagate("ballistic", 14)
+
+    def test_missing_coords_attr_treated_as_gsm(self):
+        ds = self._load_l1()
+        ds.attrs.pop("coords_system", None)
+        result = propagate(ds, "ballistic", 14)
+        assert "Bx" in result.data_vars
+
 
 class TestLoaderTagging:
     def test_l1_tag_is_none(self):

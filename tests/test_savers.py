@@ -164,6 +164,31 @@ class TestToDat:
             *_INTERP_COLS,
         ]
 
+    def test_header_units_say_gse_when_rotated(self, tmp_path):
+        ds = _load_sample_32re()
+        ds.attrs["coords_system"] = "GSE"
+        out = tmp_path / "out.dat"
+        to_dat(ds, out)
+
+        with open(out) as f:
+            first = f.readline()
+        assert "(GSE nT, km/s, cm^-3, K)" in first
+        assert "GSM" not in first
+
+    def test_header_units_gsm_byte_identical(self, tmp_path):
+        # With coords_system='GSM' (or absent) the header is exactly the
+        # historical string; the golden reference fixtures rely on this.
+        ds = _load_sample_32re()
+        out_default = tmp_path / "default.dat"
+        to_dat(ds, out_default)
+        ds.attrs["coords_system"] = "GSM"
+        out_gsm = tmp_path / "gsm.dat"
+        to_dat(ds, out_gsm)
+
+        assert out_default.read_bytes() == out_gsm.read_bytes()
+        with open(out_default) as f:
+            assert "(GSM nT, km/s, cm^-3, K)" in f.readline()
+
     def test_no_interp_when_absent(self, tmp_path):
         # MHD / legacy datasets have no flags: header and rows stay flag-free.
         ds = _load_sample_32re()

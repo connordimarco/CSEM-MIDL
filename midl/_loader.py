@@ -8,6 +8,7 @@ import pandas as pd
 import xarray as xr
 
 from midl._cache import canonical_mhd, ensure_cached
+from midl._coords import apply_coords, validate_coords
 from midl._propagate import propagate
 from midl._time import Timelike, months_in_range, parse_timestamp
 
@@ -90,6 +91,7 @@ def load(
     end: Timelike,
     target_re: float | int | str,
     method: str = "ballistic",
+    coords: str = "GSM",
 ) -> xr.Dataset:
     """Load MIDL solar wind data for a time range.
 
@@ -117,6 +119,24 @@ def load(
           only valid with this method and returns the raw L1 dataset.
         - ``"mhd"`` — server-side 1D MHD propagation. ``target_re`` must
           be an integer in ``[-70, 70]``.
+    coords : {"GSM", "GSE", "SM"}, default ``"GSM"``
+        Output coordinate system (case-insensitive). MIDL data is native
+        GSM; ``"GSE"`` and ``"SM"`` rotate the vector variables
+        (Bx, By, Bz, Ux, Uy, Uz) per minute using the server's monthly
+        angle files, with psi = ``gsm_gse_angle_deg`` and
+        mu = ``dipole_tilt_deg``::
+
+            By_gse = cos(psi)*By_gsm - sin(psi)*Bz_gsm   # Bx unchanged
+            Bz_gse = sin(psi)*By_gsm + cos(psi)*Bz_gsm
+
+            Bx_sm  = cos(mu)*Bx_gsm - sin(mu)*Bz_gsm     # By unchanged
+            Bz_sm  = sin(mu)*Bx_gsm + cos(mu)*Bz_gsm
+
+        Components are rotated in each minute's instantaneous frame
+        orientation (standard convention, same as OMNI). Scalars (rho,
+        T) and provenance columns are untouched, and the L1 ``X``
+        variable always stays the reference satellite X_GSM position.
+        Timestamps missing from the angle table get NaN vector values.
 
     Returns
     -------
@@ -137,6 +157,8 @@ def load(
             f"Unknown method {method!r}. Valid methods: 'ballistic', 'mhd'"
         )
 
+    coords_key = validate_coords(coords)
+
     if isinstance(target_re, str):
         if target_re.lower() != "l1":
             raise ValueError(
@@ -147,7 +169,7 @@ def load(
                 "target_re='l1' is only valid with method='ballistic'"
             )
         df = _load_monthly(start_ts, end_ts, "L1")
-        return _to_dataset(df, "L1")
+        return apply_coords(_to_dataset(df, "L1"), coords_key, start_ts, end_ts)
 
     if not isinstance(target_re, (int, float)) or isinstance(target_re, bool):
         raise ValueError(
@@ -157,19 +179,22 @@ def load(
     if method_key == "mhd":
         canonical = canonical_mhd(target_re)
         df = _load_monthly(start_ts, end_ts, canonical)
-        return _to_dataset(df, canonical)
+        return apply_coords(_to_dataset(df, canonical), coords_key, start_ts, end_ts)
 
     # method == "ballistic"
     re_float = float(target_re)
     if re_float.is_integer() and int(re_float) in _FIXED_BALLISTIC_RE:
         canonical = f"{int(re_float)}Re"
         df = _load_monthly(start_ts, end_ts, canonical)
-        return _to_dataset(df, canonical)
+        return apply_coords(_to_dataset(df, canonical), coords_key, start_ts, end_ts)
 
     # Custom ballistic target — load L1 (with leading padding) and
-    # propagate client-side.
+    # propagate client-side. Propagation runs on native-GSM data; the
+    # frame rotation is applied after the final time slice (and the
+    # angle months come from that final slice, not the padded range).
     l1_start = start_ts - _BALLISTIC_LEAD_PADDING
     l1_df = _load_monthly(l1_start, end_ts, "L1")
     l1_ds = _to_dataset(l1_df, "L1")
     propagated = propagate(l1_ds, "ballistic", re_float)
-    return propagated.sel(time=slice(start_ts, end_ts))
+    sliced = propagated.sel(time=slice(start_ts, end_ts))
+    return apply_coords(sliced, coords_key, start_ts, end_ts)
