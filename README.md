@@ -64,7 +64,7 @@ midl.load("2024-05-10 00:00", "2024-05-11 01:00", 32, coords="GSE")
 midl.load("2024-05-10 00:00", "2024-05-11 01:00", "L1", coords="SM")
 ```
 
-Scalars (rho, T) and provenance columns are untouched, and the L1 `X`
+Scalars (rho, T) and source columns are untouched, and the L1 `X`
 variable always remains the reference satellite X_GSM position regardless
 of `coords`. The rotation conventions and the published per-minute angle
 tables they use are documented at
