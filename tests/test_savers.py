@@ -86,7 +86,7 @@ class TestToDat:
             lines = f.readlines()
         assert lines[0].startswith("MIDL 32Re Data")
         assert "nT, km/s, cm^-3, K" in lines[0]
-        assert lines[1].strip().startswith("year")
+        assert lines[1].split()[:7] == ["yr", "mo", "dy", "hr", "mn", "sc", "msc"]
         assert lines[2].strip() == "#START"
 
     def test_data_lines(self, tmp_path):
@@ -104,6 +104,8 @@ class TestToDat:
         assert parts[2] == "1"
         assert parts[3] == "0"  # hour
         assert parts[4] == "0"  # minute
+        assert parts[5] == "0"  # second (always 0, minute cadence)
+        assert parts[6] == "0"  # millisecond (always 0)
 
     def test_nan_as_nan_string(self, tmp_path):
         ds = _load_sample_32re()

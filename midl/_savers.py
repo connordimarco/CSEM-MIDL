@@ -101,7 +101,10 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
         units += ", Re"
     header1 = f"MIDL {target} Data for {date_range} ({units})\n"
 
-    cols = "year month day hour minute Bx By Bz Ux Uy Uz rho T"
+    # SWMF #SOLARWINDFILE time stamp: yr mo dy hr mn sc msc (7 integers).
+    # Data are minute cadence, so sc and msc are always 0. Labels match the
+    # website download (MIDL-Web/static/app.js csvToDat) so both agree.
+    cols = "yr mo dy hr mn sc msc bx by bz ux uy uz rho T"
     if is_l1:
         cols += " X B_source Ux_source Uyz_source rho_source T_source"
     if has_interp:
@@ -121,6 +124,8 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
                 f"{ts.day:3d}"
                 f"{ts.hour:3d}"
                 f"{ts.minute:3d}"
+                f"{0:3d}"
+                f"{0:5d}"
             )
 
             for col, width, decimals in _DAT_FIELDS:
