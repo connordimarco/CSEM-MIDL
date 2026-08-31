@@ -70,6 +70,29 @@ of `coords`. The rotation conventions and the published per-minute angle
 tables they use are documented at
 https://csem.engin.umich.edu/MIDL/format.html.
 
+### Earth orbital motion
+
+Following the community convention (CDAWeb, OMNI, and the instrument
+teams' own L2 products), MIDL velocities have Earth's orbital motion
+around the Sun **removed**: the axes are GSE/GSM but the frame origin
+does not co-move with Earth, so Vy_GSE averages ~0 instead of the
+~+29.78 km/s aberration a true Earth-rest frame would show. Pass
+`orbital_motion=True` to restore it and receive velocities in Earth's
+rest frame:
+
+```python
+midl.load("2024-05-10", "2024-05-11", "L1", coords="GSE", orbital_motion=True)
+```
+
+The correction is seasonally exact (two-body solution: tangential
+29.29–30.29 km/s across the year plus a radial component up to
+±0.50 km/s) and is applied in whatever `coords` frame you request — in
+GSM it lands in both Uy and Uz through the per-minute rotation angles.
+Only Ux/Uy/Uz change; B, rho, and T are frame-origin-independent. The
+choice is recorded in `ds.attrs["orbital_motion"]`. Note that
+`propagate()` and SWMF input files expect convention-frame data, so keep
+the default `False` for those uses.
+
 Saving to file:
 ```python
 midl.to_csv(data, "storm.csv")

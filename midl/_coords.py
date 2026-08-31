@@ -42,6 +42,7 @@ import requests
 import xarray as xr
 
 from midl._cache import ensure_cached
+from midl._orbital import ATTR_INCLUDED, ATTR_REMOVED, add_orbital_motion
 from midl._time import months_in_range
 
 VALID_COORDS = ("GSM", "GSE", "SM")
@@ -78,10 +79,11 @@ def load_angles(start_ts: pd.Timestamp, end_ts: pd.Timestamp) -> pd.DataFrame:
         except requests.HTTPError as exc:
             raise ValueError(
                 f"No angle file available for {ym} "
-                f"({ym.replace('-', '')}_angles.csv). GSE/SM output requires "
-                "the server's monthly angle tables, which may not be "
-                "published for this month. Use coords='GSM' (the native "
-                "frame) instead."
+                f"({ym.replace('-', '')}_angles.csv). GSE/SM output and the "
+                "orbital_motion correction require the server's monthly "
+                "angle tables, which may not be published for this month. "
+                "Use coords='GSM' (the native frame) without orbital_motion "
+                "instead."
             ) from exc
         frames.append(
             pd.read_csv(path, parse_dates=["timestamp"], index_col="timestamp")
@@ -135,6 +137,7 @@ def apply_coords(
     coords: str,
     start_ts: pd.Timestamp,
     end_ts: pd.Timestamp,
+    orbital_motion: bool = False,
 ) -> xr.Dataset:
     """Rotate a native-GSM ``load()`` result into ``coords`` and stamp metadata.
 
@@ -144,12 +147,24 @@ def apply_coords(
     per-variable ``coordinate_system`` attr on the six vector variables.
     ``X`` keeps ``coordinate_system: GSM`` — it is propagation metadata
     (reference satellite X_GSM), never rotated.
+
+    ``orbital_motion=True`` additionally adds Earth's orbital velocity to
+    (Ux, Uy, Uz) after the rotation (see midl._orbital), stamping
+    ``ds.attrs['orbital_motion']``; the correction in GSM/SM output needs
+    the same monthly angle tables as the rotations.
     """
     coords = validate_coords(coords)
-    if coords != "GSM":
+    # GSE-frame data rotation and any GSM/SM orbital correction consume the
+    # angle tables; only plain native-GSM output skips the fetch.
+    angles = None
+    if coords != "GSM" or orbital_motion:
         angles = load_angles(start_ts, end_ts)
+    if coords != "GSM":
         ds = rotate_dataset(ds, coords, angles)
+    if orbital_motion:
+        ds = add_orbital_motion(ds, coords, angles)
     ds.attrs["coords_system"] = coords
+    ds.attrs["orbital_motion"] = ATTR_INCLUDED if orbital_motion else ATTR_REMOVED
     for triple in VECTOR_TRIPLES:
         for var in triple:
             if var in ds.data_vars:

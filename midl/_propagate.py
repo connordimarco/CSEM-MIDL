@@ -173,6 +173,14 @@ def propagate(ds: xr.Dataset, method: str, target_re: float) -> xr.Dataset:
             "load with coords='GSM', propagate, then rotate the result."
         )
 
+    if ds.attrs.get("orbital_motion") == "included":
+        raise ValueError(
+            "propagate() requires convention-frame data, but this dataset "
+            "has Earth's orbital motion included. Load with the default "
+            "orbital_motion=False, propagate, then reload (or re-apply the "
+            "correction) if you need Earth-frame velocities."
+        )
+
     if "X" not in ds.data_vars:
         raise ValueError(
             "propagate() requires the L1 dataset (missing 'X' source position). "

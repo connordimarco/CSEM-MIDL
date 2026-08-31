@@ -113,6 +113,11 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
 
     with open(path, "w", encoding="utf-8") as f:
         f.write(header1)
+        if ds.attrs.get("orbital_motion") == "included":
+            f.write(
+                "Earth orbital motion INCLUDED in ux/uy/uz (Earth rest "
+                "frame; non-standard, do not feed to SWMF)\n"
+            )
         f.write(header2)
         f.write("#START\n")
 

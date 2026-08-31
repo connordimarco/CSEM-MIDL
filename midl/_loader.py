@@ -92,6 +92,7 @@ def load(
     target_re: float | int | str,
     method: str = "ballistic",
     coords: str = "GSM",
+    orbital_motion: bool = False,
 ) -> xr.Dataset:
     """Load MIDL solar wind data for a time range.
 
@@ -137,6 +138,20 @@ def load(
         T) and provenance columns are untouched, and the L1 ``X``
         variable always stays the reference satellite X_GSM position.
         Timestamps missing from the angle table get NaN vector values.
+    orbital_motion : bool, default ``False``
+        MIDL follows the community convention (CDAWeb, OMNI) in which
+        Earth's orbital motion around the Sun has been removed from the
+        velocities, so Vy_GSE averages ~0 rather than the ~+29.78 km/s
+        an Earth-co-moving frame would show. ``True`` restores it,
+        returning velocities in Earth's rest frame: Earth's orbital
+        velocity — seasonally exact via a two-body solution, tangential
+        29.29-30.29 km/s plus a radial component up to ±0.50 km/s — is
+        added to (Ux, Uy, Uz) in the requested ``coords`` frame (for
+        GSM/SM via the same per-minute angle tables as ``coords``).
+        The result is stamped in ``ds.attrs['orbital_motion']``. B, rho,
+        and T are frame-origin-independent and unaffected. Corrected
+        datasets are refused by ``propagate()`` and are not suitable as
+        SWMF input; keep the default for those uses.
 
     Returns
     -------
@@ -159,6 +174,11 @@ def load(
 
     coords_key = validate_coords(coords)
 
+    if not isinstance(orbital_motion, bool):
+        raise ValueError(
+            f"orbital_motion must be a bool, got {type(orbital_motion).__name__}"
+        )
+
     if isinstance(target_re, str):
         if target_re.lower() != "l1":
             raise ValueError(
@@ -169,7 +189,8 @@ def load(
                 "target_re='l1' is only valid with method='ballistic'"
             )
         df = _load_monthly(start_ts, end_ts, "L1")
-        return apply_coords(_to_dataset(df, "L1"), coords_key, start_ts, end_ts)
+        return apply_coords(
+            _to_dataset(df, "L1"), coords_key, start_ts, end_ts, orbital_motion)
 
     if not isinstance(target_re, (int, float)) or isinstance(target_re, bool):
         raise ValueError(
@@ -179,14 +200,16 @@ def load(
     if method_key == "mhd":
         canonical = canonical_mhd(target_re)
         df = _load_monthly(start_ts, end_ts, canonical)
-        return apply_coords(_to_dataset(df, canonical), coords_key, start_ts, end_ts)
+        return apply_coords(
+            _to_dataset(df, canonical), coords_key, start_ts, end_ts, orbital_motion)
 
     # method == "ballistic"
     re_float = float(target_re)
     if re_float.is_integer() and int(re_float) in _FIXED_BALLISTIC_RE:
         canonical = f"{int(re_float)}Re"
         df = _load_monthly(start_ts, end_ts, canonical)
-        return apply_coords(_to_dataset(df, canonical), coords_key, start_ts, end_ts)
+        return apply_coords(
+            _to_dataset(df, canonical), coords_key, start_ts, end_ts, orbital_motion)
 
     # Custom ballistic target — load L1 (with leading padding) and
     # propagate client-side. Propagation runs on native-GSM data; the
@@ -197,4 +220,4 @@ def load(
     l1_ds = _to_dataset(l1_df, "L1")
     propagated = propagate(l1_ds, "ballistic", re_float)
     sliced = propagated.sel(time=slice(start_ts, end_ts))
-    return apply_coords(sliced, coords_key, start_ts, end_ts)
+    return apply_coords(sliced, coords_key, start_ts, end_ts, orbital_motion)
