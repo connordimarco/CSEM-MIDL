@@ -96,10 +96,10 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
     first = pd.Timestamp(df.index[0])
     last = pd.Timestamp(df.index[-1])
     date_range = f"{first:%Y-%m}" if first.to_period("M") == last.to_period("M") else f"{first:%Y-%m} to {last:%Y-%m}"
-    units = f"{ds.attrs.get('coords_system', 'GSM')} nT, km/s, cm^-3, K"
+    units = "nT, km/s, cm^-3, K"
     if is_l1:
         units += ", Re"
-    header1 = f"MIDL {target} Data for {date_range} ({units})\n"
+    header1 = f"MIDL {target}, {date_range} ({units})\n"
 
     # Five integer time columns with spelled-out labels (agreed header
     # format; SWMF readers accept 5 time columns per G. Toth, 2026-09).
@@ -112,12 +112,19 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
         cols += " " + " ".join(_INTERP_COLS)
     header2 = cols + "\n"
 
+    # #COORDINATES is always present so BATSRUS can interpret the frame;
+    # the orbital-motion state belongs to the coordinate system, so it
+    # rides on the frame line (per G. Toth, 2026-09).
+    frame = ds.attrs.get("coords_system", "GSM")
+    if ds.attrs.get("orbital_motion") == "included":
+        orbital_note = "Earth orbital motion included"
+    else:
+        orbital_note = "Earth orbital motion EXCLUDED"
+
     with open(path, "w", encoding="utf-8") as f:
         f.write(header1)
-        if ds.attrs.get("orbital_motion") == "included":
-            f.write("Earth orbital motion included\n")
-        else:
-            f.write("Earth orbital motion EXCLUDED\n")
+        f.write("\n#COORDINATES\n")
+        f.write(f"{frame:<24}{orbital_note}\n\n")
         f.write(header2)
         f.write("#START\n")
 

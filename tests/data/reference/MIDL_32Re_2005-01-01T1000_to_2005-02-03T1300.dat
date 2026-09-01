@@ -1,5 +1,8 @@
-MIDL 32Re Data for 2005-01 to 2005-02 (GSM nT, km/s, cm^-3, K)
-Earth orbital motion included
+MIDL 32Re, 2005-01 to 2005-02 (nT, km/s, cm^-3, K)
+
+#COORDINATES
+GSM                     Earth orbital motion included
+
 year month day hour minute Bx By Bz Ux Uy Uz rho T B_interp Ux_interp Uyz_interp rho_interp T_interp
 #START
 2005  1  1 10  0    -3.78    -0.87     3.74    -429.3     58.44    -13.95     6.190     134911    0    0    0    0    0

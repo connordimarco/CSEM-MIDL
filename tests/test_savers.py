@@ -84,13 +84,17 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.readlines()
-        assert lines[0].startswith("MIDL 32Re Data")
-        assert "nT, km/s, cm^-3, K" in lines[0]
-        assert lines[1].strip() == "Earth orbital motion EXCLUDED"
-        assert lines[2].split()[:5] == ["year", "month", "day", "hour", "minute"]
-        assert lines[2].split()[5:13] == [
+        assert lines[0].startswith("MIDL 32Re,")
+        assert "(nT, km/s, cm^-3, K)" in lines[0]
+        assert lines[1].strip() == ""
+        assert lines[2].strip() == "#COORDINATES"
+        assert lines[3].split()[0] == "GSM"
+        assert lines[3].strip().endswith("Earth orbital motion EXCLUDED")
+        assert lines[4].strip() == ""
+        assert lines[5].split()[:5] == ["year", "month", "day", "hour", "minute"]
+        assert lines[5].split()[5:13] == [
             "Bx", "By", "Bz", "Ux", "Uy", "Uz", "rho", "T"]
-        assert lines[3].strip() == "#START"
+        assert lines[6].strip() == "#START"
 
     def test_orbital_motion_included_line(self, tmp_path):
         ds = _load_sample_32re()
@@ -100,7 +104,8 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.readlines()
-        assert lines[1].strip() == "Earth orbital motion included"
+        assert lines[3].split()[0] == "GSM"
+        assert lines[3].strip().endswith("Earth orbital motion included")
 
     def test_data_lines(self, tmp_path):
         ds = _load_sample_32re()
@@ -110,7 +115,7 @@ class TestToDat:
         with open(out) as f:
             lines = f.readlines()
         # First data line: 5 time integers, then the floats.
-        data_line = lines[4]
+        data_line = lines[7]
         parts = data_line.split()
         assert parts[0] == "2024"
         assert parts[1] == "3"
@@ -127,8 +132,8 @@ class TestToDat:
         with open(out) as f:
             content = f.read()
         lines = content.strip().split("\n")
-        # Row at index 5 has NaN (4 header lines precede the data)
-        nan_line = lines[4 + 5]
+        # Row at index 5 has NaN (7 header lines precede the data)
+        nan_line = lines[7 + 5]
         assert "nan" in nan_line
 
     def test_l1_has_extra_columns(self, tmp_path):
@@ -138,7 +143,7 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.readlines()
-        assert "X B_source" in lines[2]
+        assert "X B_source" in lines[5]
         assert ", Re)" in lines[0]
 
     def test_no_target_attr_raises(self, tmp_path):
@@ -156,12 +161,12 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.read().splitlines()
-        header = lines[2].split()
+        header = lines[5].split()
         assert header[-5:] == _INTERP_COLS
         # Data rows: 5 trailing flag fields (width 5), nan on the NaN row.
-        first_row = lines[4].split()
+        first_row = lines[7].split()
         assert first_row[-5:] == ["0", "0", "0", "0", "0"]
-        nan_row = lines[5].split()
+        nan_row = lines[8].split()
         assert nan_row[-5:] == ["nan", "nan", "nan", "nan", "nan"]
 
     def test_interp_columns_follow_l1_source(self, tmp_path):
@@ -172,22 +177,23 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.read().splitlines()
-        header = lines[2].split()
+        header = lines[5].split()
         assert header[-10:] == [
             "B_source", "Ux_source", "Uyz_source", "rho_source", "T_source",
             *_INTERP_COLS,
         ]
 
-    def test_header_units_say_gse_when_rotated(self, tmp_path):
+    def test_coordinates_block_says_gse_when_rotated(self, tmp_path):
         ds = _load_sample_32re()
         ds.attrs["coords_system"] = "GSE"
         out = tmp_path / "out.dat"
         to_dat(ds, out)
 
         with open(out) as f:
-            first = f.readline()
-        assert "(GSE nT, km/s, cm^-3, K)" in first
-        assert "GSM" not in first
+            lines = f.readlines()
+        assert lines[2].strip() == "#COORDINATES"
+        assert lines[3].split()[0] == "GSE"
+        assert "GSM" not in lines[3]
 
     def test_header_units_gsm_byte_identical(self, tmp_path):
         # With coords_system='GSM' (or absent) the header is exactly the
@@ -201,7 +207,8 @@ class TestToDat:
 
         assert out_default.read_bytes() == out_gsm.read_bytes()
         with open(out_default) as f:
-            assert "(GSM nT, km/s, cm^-3, K)" in f.readline()
+            lines = f.readlines()
+        assert lines[3].split()[0] == "GSM"
 
     def test_no_interp_when_absent(self, tmp_path):
         # MHD / legacy datasets have no flags: header and rows stay flag-free.
@@ -211,5 +218,5 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.read().splitlines()
-        assert not any(c in lines[2] for c in _INTERP_COLS)
-        assert lines[2].split()[-1] == "T"
+        assert not any(c in lines[5] for c in _INTERP_COLS)
+        assert lines[5].split()[-1] == "T"

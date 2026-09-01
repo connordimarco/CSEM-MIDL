@@ -1,5 +1,8 @@
-MIDL L1 Data for 2005-01 to 2005-02 (GSM nT, km/s, cm^-3, K, Re)
-Earth orbital motion included
+MIDL L1, 2005-01 to 2005-02 (nT, km/s, cm^-3, K, Re)
+
+#COORDINATES
+GSM                     Earth orbital motion included
+
 year month day hour minute Bx By Bz Ux Uy Uz rho T X B_source Ux_source Uyz_source rho_source T_source B_interp Ux_interp Uyz_interp rho_interp T_interp
 #START
 2005  1  1 10  0    -4.58     3.29    -0.28    -427.8     31.68     25.20     5.451     152005     231.2   13   13   13   13   13    0    0    0    0    0

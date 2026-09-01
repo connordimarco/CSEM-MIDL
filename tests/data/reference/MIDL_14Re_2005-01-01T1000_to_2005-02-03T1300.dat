@@ -1,5 +1,8 @@
-MIDL 14Re Data for 2005-01 to 2005-02 (GSM nT, km/s, cm^-3, K)
-Earth orbital motion included
+MIDL 14Re, 2005-01 to 2005-02 (nT, km/s, cm^-3, K)
+
+#COORDINATES
+GSM                     Earth orbital motion included
+
 year month day hour minute Bx By Bz Ux Uy Uz rho T B_interp Ux_interp Uyz_interp rho_interp T_interp
 #START
 2005  1  1 10  0    -2.18    -0.49     3.94    -439.4     54.55    -17.99     6.398     143037    0    0    0    0    0
