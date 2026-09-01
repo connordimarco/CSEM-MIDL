@@ -8,6 +8,12 @@ Python client for the [MIDL solar wind dataset](https://csem.engin.umich.edu/MID
 pip install csem-midl
 ```
 
+To update an existing installation:
+
+```
+pip install --upgrade csem-midl
+```
+
 ## Quickstart
 
 ```python
