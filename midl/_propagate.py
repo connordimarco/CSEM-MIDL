@@ -160,6 +160,10 @@ def propagate(ds: xr.Dataset, method: str, target_re: float) -> xr.Dataset:
     is set), a ``UserWarning`` is emitted and propagation proceeds anyway.
     Propagating already-propagated data is almost never what you want;
     download the L1 dataset instead.
+
+    Datasets with Earth's orbital motion included propagate fine: the
+    correction is tangential-only, so the Ux values that set the
+    per-sample travel times are identical to the convention frame's.
     """
     method = method.lower()
     if method not in METHODS:
@@ -171,14 +175,6 @@ def propagate(ds: xr.Dataset, method: str, target_re: float) -> xr.Dataset:
             f"propagate() requires GSM-frame data, got coords_system="
             f"{coords_system!r}. Ballistic propagation is GSM-only physics: "
             "load with coords='GSM', propagate, then rotate the result."
-        )
-
-    if ds.attrs.get("orbital_motion") == "included":
-        raise ValueError(
-            "propagate() requires convention-frame data, but this dataset "
-            "has Earth's orbital motion included. Load with the default "
-            "orbital_motion=False, propagate, then reload (or re-apply the "
-            "correction) if you need Earth-frame velocities."
         )
 
     if "X" not in ds.data_vars:

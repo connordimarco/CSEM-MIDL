@@ -81,28 +81,29 @@ TIMES2 = pd.date_range("2024-03-01 00:00", periods=2, freq="min")
 
 
 class TestAddOrbitalMotion:
-    def test_gse_adds_vt_to_uy_and_vr_to_ux(self):
+    def test_gse_adds_vt_to_uy_only(self):
+        # Tangential-only: v_r is never applied, so Ux stays as-is.
         ds = _ds(TIMES2)
-        v_r, v_t = earth_orbital_speeds(TIMES2)
+        _, v_t = earth_orbital_speeds(TIMES2)
         out = add_orbital_motion(ds, "GSE", None)
-        np.testing.assert_allclose(out["Ux"].values, ds["Ux"].values + v_r, atol=1e-12)
+        np.testing.assert_allclose(out["Ux"].values, ds["Ux"].values, atol=1e-12)
         np.testing.assert_allclose(out["Uy"].values, ds["Uy"].values + v_t, atol=1e-12)
         np.testing.assert_allclose(out["Uz"].values, ds["Uz"].values, atol=1e-12)
 
     def test_gsm_90deg_moves_correction_to_uz(self):
         # psi = 90: dUy = cos(psi)*v_t = 0, dUz = -sin(psi)*v_t = -v_t.
         ds = _ds(TIMES2)
-        v_r, v_t = earth_orbital_speeds(TIMES2)
+        _, v_t = earth_orbital_speeds(TIMES2)
         out = add_orbital_motion(ds, "GSM", _angles(TIMES2, psi=90.0, mu=0.0))
-        np.testing.assert_allclose(out["Ux"].values, ds["Ux"].values + v_r, atol=1e-9)
+        np.testing.assert_allclose(out["Ux"].values, ds["Ux"].values, atol=1e-9)
         np.testing.assert_allclose(out["Uy"].values, ds["Uy"].values, atol=1e-9)
         np.testing.assert_allclose(out["Uz"].values, ds["Uz"].values - v_t, atol=1e-9)
 
     def test_gsm_matches_rotated_gse_correction(self):
-        # Rx(psi) @ (v_r, v_t, 0) for a generic angle.
+        # Rx(psi) @ (0, v_t, 0) for a generic angle.
         psi_deg = 23.0
         ds = _ds(TIMES2)
-        v_r, v_t = earth_orbital_speeds(TIMES2)
+        _, v_t = earth_orbital_speeds(TIMES2)
         out = add_orbital_motion(ds, "GSM", _angles(TIMES2, psi=psi_deg, mu=0.0))
         psi = np.radians(psi_deg)
         np.testing.assert_allclose(
@@ -111,13 +112,13 @@ class TestAddOrbitalMotion:
             out["Uz"].values, ds["Uz"].values - np.sin(psi) * v_t, atol=1e-9)
 
     def test_sm_chains_tilt(self):
-        # mu = 90, psi = 0: dU_GSM = (v_r, v_t, 0); Ry(90) -> (0, v_t, v_r).
+        # psi = 90: dU_GSM = (0, 0, -v_t); mu = 90: Ry(90) -> (v_t, 0, 0).
         ds = _ds(TIMES2)
-        v_r, v_t = earth_orbital_speeds(TIMES2)
-        out = add_orbital_motion(ds, "SM", _angles(TIMES2, psi=0.0, mu=90.0))
-        np.testing.assert_allclose(out["Ux"].values, ds["Ux"].values, atol=1e-9)
-        np.testing.assert_allclose(out["Uy"].values, ds["Uy"].values + v_t, atol=1e-9)
-        np.testing.assert_allclose(out["Uz"].values, ds["Uz"].values + v_r, atol=1e-9)
+        _, v_t = earth_orbital_speeds(TIMES2)
+        out = add_orbital_motion(ds, "SM", _angles(TIMES2, psi=90.0, mu=90.0))
+        np.testing.assert_allclose(out["Ux"].values, ds["Ux"].values + v_t, atol=1e-9)
+        np.testing.assert_allclose(out["Uy"].values, ds["Uy"].values, atol=1e-9)
+        np.testing.assert_allclose(out["Uz"].values, ds["Uz"].values, atol=1e-9)
 
     def test_b_and_scalars_untouched(self):
         ds = _ds(TIMES2)
@@ -175,10 +176,23 @@ class TestApplyCoordsWiring:
                 out[var].values, expected[var].values, atol=1e-12)
 
 
-class TestPropagateGuard:
-    def test_orbital_motion_dataset_refused(self):
-        ds = _ds(TIMES2)
+class TestPropagateAcceptsOrbital:
+    def test_orbital_motion_dataset_propagates(self):
+        # The correction is tangential-only (Ux untouched), so corrected
+        # datasets propagate identically to convention-frame ones and the
+        # attr rides along.
+        times = pd.date_range("2024-03-01 00:00", periods=10, freq="min")
+        ds = _ds(times, X=np.full(len(times), 220.0))
         ds.attrs["coords_system"] = "GSM"
         ds.attrs["orbital_motion"] = "included"
-        with pytest.raises(ValueError, match="orbital motion"):
-            propagate(ds, "ballistic", 20)
+        out = propagate(ds, "ballistic", 20)
+        assert out.attrs["orbital_motion"] == "included"
+
+
+class TestLoadDefault:
+    def test_load_defaults_to_orbital_motion_on(self):
+        import inspect
+
+        from midl._loader import load
+
+        assert inspect.signature(load).parameters["orbital_motion"].default is True

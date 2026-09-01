@@ -17,12 +17,16 @@ Earth's heliocentric velocity expressed on GSE axes is
 
 with v_r the radial speed (positive receding from the Sun, +-0.50 km/s
 over the year) and v_t the tangential speed (29.29 km/s at aphelion to
-30.29 km/s at perihelion, time-mean 29.78 km/s), so the correction *adds*
-``(+v_r, +v_t, 0)`` to (Ux, Uy, Uz) in GSE. For GSM/SM output the same
-GSE vector is rotated through the published per-minute angle tables
-(see midl._coords for the pinned sign conventions):
+30.29 km/s at perihelion, time-mean 29.78 km/s). The applied correction
+is **tangential-only** — it *adds* ``(0, +v_t, 0)`` to (Ux, Uy, Uz) in
+GSE, leaving Ux untouched: the community convention is only known to
+remove the tangential (Uy) component, and whether the +-0.50 km/s radial
+part was ever removed is not documented, so we do not re-add it
+(G. Toth, 2026-09). For GSM/SM output the same GSE vector is rotated
+through the published per-minute angle tables (see midl._coords for the
+pinned sign conventions):
 
-    GSM: dU = ( v_r,  cos(psi)*v_t, -sin(psi)*v_t )         Rx(psi)
+    GSM: dU = ( 0,  cos(psi)*v_t, -sin(psi)*v_t )            Rx(psi)
     SM : dU = Ry(mu) @ dU_GSM
 
 Both speeds come from a closed-form two-body (Kepler) solution of Earth's
@@ -34,8 +38,9 @@ equation by Newton iteration, then
 
 Accuracy vs. a full ephemeris is ~0.02 km/s (dominated by the neglected
 Earth-Moon barycenter wobble, ~0.013 km/s, and planetary perturbations),
-far below solar wind instrument accuracy. Only (Ux, Uy, Uz) are corrected;
-B, rho, T, and provenance columns are frame-origin-independent.
+far below solar wind instrument accuracy. Only velocity components are
+corrected (Ux only through frame rotation, never in GSE); B, rho, T, and
+provenance columns are frame-origin-independent.
 """
 
 from __future__ import annotations
@@ -97,10 +102,13 @@ def add_orbital_motion(
     are never touched.
     """
     times = pd.DatetimeIndex(ds["time"].values)
-    v_r, v_t = earth_orbital_speeds(times)
+    # Tangential-only: the convention is only known to remove v_t (see
+    # module docstring), so v_r is computed but deliberately not applied.
+    _v_r, v_t = earth_orbital_speeds(times)
+    zeros = np.zeros_like(v_t)
 
     if coords == "GSE":
-        du_x, du_y, du_z = v_r, v_t, np.zeros_like(v_t)
+        du_x, du_y, du_z = zeros, v_t, zeros
         missing = np.zeros(len(times), dtype=bool)
     else:
         if angles is None:
@@ -109,8 +117,8 @@ def add_orbital_motion(
             )
         aligned = angles.reindex(times)
         psi = np.radians(aligned["gsm_gse_angle_deg"].to_numpy(dtype=np.float64))
-        # v_GSM = Rx(psi) @ (v_r, v_t, 0)
-        du_x = v_r
+        # v_GSM = Rx(psi) @ (0, v_t, 0)
+        du_x = zeros
         du_y = np.cos(psi) * v_t
         du_z = -np.sin(psi) * v_t
         missing = ~np.isfinite(psi)

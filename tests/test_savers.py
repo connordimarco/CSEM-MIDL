@@ -86,8 +86,21 @@ class TestToDat:
             lines = f.readlines()
         assert lines[0].startswith("MIDL 32Re Data")
         assert "nT, km/s, cm^-3, K" in lines[0]
-        assert lines[1].split()[:7] == ["yr", "mo", "dy", "hr", "mn", "sc", "msc"]
-        assert lines[2].strip() == "#START"
+        assert lines[1].strip() == "Earth orbital motion EXCLUDED"
+        assert lines[2].split()[:5] == ["year", "month", "day", "hour", "minute"]
+        assert lines[2].split()[5:13] == [
+            "Bx", "By", "Bz", "Ux", "Uy", "Uz", "rho", "T"]
+        assert lines[3].strip() == "#START"
+
+    def test_orbital_motion_included_line(self, tmp_path):
+        ds = _load_sample_32re()
+        ds.attrs["orbital_motion"] = "included"
+        out = tmp_path / "out.dat"
+        to_dat(ds, out)
+
+        with open(out) as f:
+            lines = f.readlines()
+        assert lines[1].strip() == "Earth orbital motion included"
 
     def test_data_lines(self, tmp_path):
         ds = _load_sample_32re()
@@ -96,16 +109,15 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.readlines()
-        # First data line
-        data_line = lines[3]
+        # First data line: 5 time integers, then the floats.
+        data_line = lines[4]
         parts = data_line.split()
         assert parts[0] == "2024"
         assert parts[1] == "3"
         assert parts[2] == "1"
         assert parts[3] == "0"  # hour
         assert parts[4] == "0"  # minute
-        assert parts[5] == "0"  # second (always 0, minute cadence)
-        assert parts[6] == "0"  # millisecond (always 0)
+        assert "." in parts[5]  # Bx directly follows the time stamp
 
     def test_nan_as_nan_string(self, tmp_path):
         ds = _load_sample_32re()
@@ -115,8 +127,8 @@ class TestToDat:
         with open(out) as f:
             content = f.read()
         lines = content.strip().split("\n")
-        # Row at index 5 (line 8 = header3 + 5 data rows) has NaN
-        nan_line = lines[3 + 5]  # 3 header + row index 5
+        # Row at index 5 has NaN (4 header lines precede the data)
+        nan_line = lines[4 + 5]
         assert "nan" in nan_line
 
     def test_l1_has_extra_columns(self, tmp_path):
@@ -126,7 +138,7 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.readlines()
-        assert "X B_source" in lines[1]
+        assert "X B_source" in lines[2]
         assert ", Re)" in lines[0]
 
     def test_no_target_attr_raises(self, tmp_path):
@@ -144,12 +156,12 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.read().splitlines()
-        header = lines[1].split()
+        header = lines[2].split()
         assert header[-5:] == _INTERP_COLS
         # Data rows: 5 trailing flag fields (width 5), nan on the NaN row.
-        first_row = lines[3].split()
+        first_row = lines[4].split()
         assert first_row[-5:] == ["0", "0", "0", "0", "0"]
-        nan_row = lines[4].split()
+        nan_row = lines[5].split()
         assert nan_row[-5:] == ["nan", "nan", "nan", "nan", "nan"]
 
     def test_interp_columns_follow_l1_source(self, tmp_path):
@@ -160,7 +172,7 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.read().splitlines()
-        header = lines[1].split()
+        header = lines[2].split()
         assert header[-10:] == [
             "B_source", "Ux_source", "Uyz_source", "rho_source", "T_source",
             *_INTERP_COLS,
@@ -199,5 +211,5 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.read().splitlines()
-        assert not any(c in lines[1] for c in _INTERP_COLS)
-        assert lines[1].split()[-1] == "T"
+        assert not any(c in lines[2] for c in _INTERP_COLS)
+        assert lines[2].split()[-1] == "T"

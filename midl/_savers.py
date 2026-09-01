@@ -101,10 +101,11 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
         units += ", Re"
     header1 = f"MIDL {target} Data for {date_range} ({units})\n"
 
-    # SWMF #SOLARWINDFILE time stamp: yr mo dy hr mn sc msc (7 integers).
-    # Data are minute cadence, so sc and msc are always 0. Labels match the
-    # website download (MIDL-Web/static/app.js csvToDat) so both agree.
-    cols = "yr mo dy hr mn sc msc bx by bz ux uy uz rho T"
+    # Five integer time columns with spelled-out labels (agreed header
+    # format; SWMF readers accept 5 time columns per G. Toth, 2026-09).
+    # Labels match the website download (MIDL-Web/static/app.js csvToDat)
+    # so both agree.
+    cols = "year month day hour minute Bx By Bz Ux Uy Uz rho T"
     if is_l1:
         cols += " X B_source Ux_source Uyz_source rho_source T_source"
     if has_interp:
@@ -114,10 +115,9 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
     with open(path, "w", encoding="utf-8") as f:
         f.write(header1)
         if ds.attrs.get("orbital_motion") == "included":
-            f.write(
-                "Earth orbital motion INCLUDED in ux/uy/uz (Earth rest "
-                "frame; non-standard, do not feed to SWMF)\n"
-            )
+            f.write("Earth orbital motion included\n")
+        else:
+            f.write("Earth orbital motion EXCLUDED\n")
         f.write(header2)
         f.write("#START\n")
 
@@ -129,8 +129,6 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
                 f"{ts.day:3d}"
                 f"{ts.hour:3d}"
                 f"{ts.minute:3d}"
-                f"{0:3d}"
-                f"{0:5d}"
             )
 
             for col, width, decimals in _DAT_FIELDS:

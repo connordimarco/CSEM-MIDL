@@ -92,7 +92,7 @@ def load(
     target_re: float | int | str,
     method: str = "ballistic",
     coords: str = "GSM",
-    orbital_motion: bool = False,
+    orbital_motion: bool = True,
 ) -> xr.Dataset:
     """Load MIDL solar wind data for a time range.
 
@@ -138,20 +138,25 @@ def load(
         T) and provenance columns are untouched, and the L1 ``X``
         variable always stays the reference satellite X_GSM position.
         Timestamps missing from the angle table get NaN vector values.
-    orbital_motion : bool, default ``False``
-        MIDL follows the community convention (CDAWeb, OMNI) in which
-        Earth's orbital motion around the Sun has been removed from the
-        velocities, so Vy_GSE averages ~0 rather than the ~+29.78 km/s
-        an Earth-co-moving frame would show. ``True`` restores it,
-        returning velocities in Earth's rest frame: Earth's orbital
-        velocity — seasonally exact via a two-body solution, tangential
-        29.29-30.29 km/s plus a radial component up to ±0.50 km/s — is
-        added to (Ux, Uy, Uz) in the requested ``coords`` frame (for
-        GSM/SM via the same per-minute angle tables as ``coords``).
-        The result is stamped in ``ds.attrs['orbital_motion']``. B, rho,
-        and T are frame-origin-independent and unaffected. Corrected
-        datasets are refused by ``propagate()`` and are not suitable as
-        SWMF input; keep the default for those uses.
+    orbital_motion : bool, default ``True``
+        The underlying data follow the community convention (CDAWeb,
+        OMNI) in which Earth's orbital motion around the Sun has been
+        removed from the velocities, so Vy_GSE averages ~0 rather than
+        the ~+29.78 km/s an Earth-co-moving frame would show. The
+        default restores it, returning velocities in Earth's rest frame
+        — the physically correct upstream input for Earth-centered
+        magnetosphere models such as SWMF: Earth's tangential orbital
+        speed (seasonally exact via a two-body solution,
+        29.29-30.29 km/s) is added along +Y_GSE, expressed in the
+        requested ``coords`` frame (for GSM/SM via the same per-minute
+        angle tables as ``coords``, so default GSM loads now also fetch
+        the cached angle files). Ux is left as-is: the convention is
+        only known to remove the tangential component, so the ±0.50 km/s
+        radial part is not re-added.
+        The choice is stamped in ``ds.attrs['orbital_motion']`` and in
+        the ``to_dat`` header. B, rho, and T are frame-origin-
+        independent and unaffected. Pass ``False`` for convention-frame
+        (CDAWeb/OMNI-comparable) velocities.
 
     Returns
     -------

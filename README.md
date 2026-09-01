@@ -73,25 +73,29 @@ https://csem.engin.umich.edu/MIDL/format.html.
 ### Earth orbital motion
 
 Following the community convention (CDAWeb, OMNI, and the instrument
-teams' own L2 products), MIDL velocities have Earth's orbital motion
-around the Sun **removed**: the axes are GSE/GSM but the frame origin
-does not co-move with Earth, so Vy_GSE averages ~0 instead of the
-~+29.78 km/s aberration a true Earth-rest frame would show. Pass
-`orbital_motion=True` to restore it and receive velocities in Earth's
-rest frame:
+teams' own L2 products), the underlying MIDL data have Earth's orbital
+motion around the Sun **removed**: the axes are GSE/GSM but the frame
+origin does not co-move with Earth, so Vy_GSE averages ~0 instead of
+the ~+29.78 km/s aberration a true Earth-rest frame would show. Since
+v1.1.1 `load()` restores it **by default**, returning velocities in
+Earth's rest frame — the physically correct upstream input for
+Earth-centered magnetosphere models such as SWMF. Pass
+`orbital_motion=False` for convention-frame (CDAWeb/OMNI-comparable)
+velocities:
 
 ```python
-midl.load("2024-05-10", "2024-05-11", "L1", coords="GSE", orbital_motion=True)
+midl.load("2024-05-10", "2024-05-11", "L1", coords="GSE", orbital_motion=False)
 ```
 
-The correction is seasonally exact (two-body solution: tangential
-29.29–30.29 km/s across the year plus a radial component up to
-±0.50 km/s) and is applied in whatever `coords` frame you request — in
-GSM it lands in both Uy and Uz through the per-minute rotation angles.
-Only Ux/Uy/Uz change; B, rho, and T are frame-origin-independent. The
-choice is recorded in `ds.attrs["orbital_motion"]`. Note that
-`propagate()` and SWMF input files expect convention-frame data, so keep
-the default `False` for those uses.
+The correction is seasonally exact (two-body solution, tangential
+29.29–30.29 km/s across the year, added along +Y_GSE) and is expressed
+in whatever `coords` frame you request — in GSM it lands in both Uy and
+Uz through the per-minute rotation angles. Ux is left as-is (the
+convention is only known to remove the tangential component, so Earth's
+±0.50 km/s radial speed is not re-added); B, rho, and T are
+frame-origin-independent. The choice is recorded in
+`ds.attrs["orbital_motion"]`, and `to_dat` headers state it as
+`Earth orbital motion included` or `Earth orbital motion EXCLUDED`.
 
 Saving to file:
 ```python
