@@ -84,7 +84,7 @@ class TestToDat:
 
         with open(out) as f:
             lines = f.readlines()
-        assert lines[0].startswith("MIDL 32Re,")
+        assert lines[0].startswith("MIDL Ballistic 32Re, 2024-03-01 to ")
         assert "(nT, km/s, cm^-3, K)" in lines[0]
         assert lines[1].strip() == ""
         assert lines[2].strip() == "#COORDINATES"
@@ -144,7 +144,18 @@ class TestToDat:
         with open(out) as f:
             lines = f.readlines()
         assert "X B_source" in lines[5]
+        assert lines[0].startswith("MIDL L1 (Merged at Closest Satellite Location), ")
         assert ", Re)" in lines[0]
+
+    def test_mhd_title_line(self, tmp_path):
+        # Same wording as the website: method label, unpadded distance.
+        ds = _to_dataset(_read_csv(DATA_DIR / "202403_32Re.csv"), "mhd_014Re")
+        out = tmp_path / "out.dat"
+        to_dat(ds, out)
+
+        with open(out) as f:
+            lines = f.readlines()
+        assert lines[0].startswith("MIDL MHD (1D BATSRUS) 14Re, 2024-03-01 to ")
 
     def test_no_target_attr_raises(self, tmp_path):
         ds = _load_sample_32re()

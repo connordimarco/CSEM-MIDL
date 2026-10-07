@@ -89,17 +89,25 @@ def to_dat(ds: xr.Dataset, path: str | Path) -> None:
         )
 
     is_l1 = target == "L1"
+    propagation = ds.attrs.get("midl_propagation") or {}
+    is_mhd = propagation.get("method") == "mhd"
 
-    # Build header
+    # Build header. The title line matches the website download
+    # (MIDL-Web/static/app.js csvToDat): method, target, dates, units.
     df = ds.to_dataframe()
     has_interp = all(col in df.columns for col in _INTERP_COLS)
     first = pd.Timestamp(df.index[0])
     last = pd.Timestamp(df.index[-1])
-    date_range = f"{first:%Y-%m}" if first.to_period("M") == last.to_period("M") else f"{first:%Y-%m} to {last:%Y-%m}"
+    if is_l1:
+        title = "L1 (Merged at Closest Satellite Location)"
+    elif is_mhd:
+        title = f"MHD (1D BATSRUS) {target}"
+    else:
+        title = f"Ballistic {target}"
     units = "nT, km/s, cm^-3, K"
     if is_l1:
         units += ", Re"
-    header1 = f"MIDL {target}, {date_range} ({units})\n"
+    header1 = f"MIDL {title}, {first:%Y-%m-%d} to {last:%Y-%m-%d} ({units})\n"
 
     # Five integer time columns with spelled-out labels (agreed header
     # format; SWMF readers accept 5 time columns per G. Toth, 2026-09).
